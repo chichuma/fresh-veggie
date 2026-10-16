@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.freshveggie</groupId>
+    <artifactId>fresh-veggie</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.14</version>
+        <relativePath/>
+    </parent>
+
+    <modules>
+        <module>fresh-veggie-common</module>
+        <module>fresh-veggie-pojo</module>
+        <module>fresh-veggie-server</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.proc>full</maven.compiler.proc>
+        <mybatis-spring-boot-starter.version>3.0.5</mybatis-spring-boot-starter.version>
+        <jjwt.version>0.12.7</jjwt.version>
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <spring-statemachine.version>4.0.2</spring-statemachine.version>
+        <aliyun-oss.version>3.18.5</aliyun-oss.version>
+        <springdoc.version>2.8.9</springdoc.version>
+        <httpclient4.version>4.5.13</httpclient4.version>
+        <httpcore4.version>4.4.16</httpcore4.version>
+        <redisson.version>3.52.0</redisson.version>
+        <netty.version>4.1.138.Final</netty.version>
+        <caffeine.version>3.2.4</caffeine.version>
+        <commons-lang3.version>3.19.0</commons-lang3.version>
+        <swagger.version>2.2.36</swagger.version>
+
+        <!-- surefire 的 @{argLine} 是「迟到替换」占位符，依赖同名属性存在。
+             不定义它，占位符会原样传给 JVM，被当成 @参数文件 读取并报
+             "Error: could not open `{argLine}'" 导致 fork 启动失败。
+             留空即可；若以后接入 JaCoCo，它会由 prepare-agent 自动赋值。 -->
+        <argLine/>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+
+            <!-- 子模块 -->
+            <dependency>
+                <groupId>com.freshveggie</groupId>
+                <artifactId>fresh-veggie-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.freshveggie</groupId>
+                <artifactId>fresh-veggie-pojo</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- MyBatis -->
+            <dependency>
+                <groupId>org.mybatis.spring.boot</groupId>
+                <artifactId>mybatis-spring-boot-starter</artifactId>
+                <version>${mybatis-spring-boot-starter.version}</version>
+            </dependency>
+            <!-- MyBatis-Plus -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+            <!--
+                仅注解包（@TableField / FieldFill / @TableName 等）。
+                给 fresh-veggie-pojo 用：实体需要 fill 标注才能触发
+                MetaObjectHandler，但 pojo 不该依赖整个 starter。
+            -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-annotation</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <!-- JWT -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+
+            <!-- Spring 状态机 -->
+            <dependency>
+                <groupId>org.springframework.statemachine</groupId>
+                <artifactId>spring-statemachine-core</artifactId>
+                <version>${spring-statemachine.version}</version>
+            </dependency>
+
+            <!-- 阿里云 OSS -->
+            <dependency>
+                <groupId>com.aliyun.oss</groupId>
+                <artifactId>aliyun-sdk-oss</artifactId>
+                <version>${aliyun-oss.version}</version>
+            </dependency>
+
+            <!-- SpringDoc -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- Redisson 分布式锁 -->
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson-spring-boot-starter</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+            <!-- Redisson 核心包 -->
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+
+            <!-- Apache HttpClient -->
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpclient</artifactId>
+                <version>${httpclient4.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpcore</artifactId>
+                <version>${httpcore4.version}</version>
+            </dependency>
+
+            <!-- Caffeine 本地缓存 -->
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${caffeine.version}</version>
+            </dependency>
+
+            <!-- BouncyCastle -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.86</version>
+            </dependency>
+
+            <!-- swagger -->
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations-jakarta</artifactId>
+                <version>${swagger.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

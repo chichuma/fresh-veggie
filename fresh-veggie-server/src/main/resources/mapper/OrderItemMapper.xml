@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.freshveggie.mapper.OrderItemMapper">
+
+    <!-- 批量新增订单明细,对齐新 order_item 结构(含产地/规格/单位/单价快照) -->
+    <insert id="insertBatch">
+        insert into order_item (order_id, product_id, name, image, spec, unit, origin, unit_price, number, amount)
+        values
+        <foreach collection="orderItems" item="order" separator=",">
+            (#{order.orderId}, #{order.productId}, #{order.name}, #{order.image}, #{order.spec}, #{order.unit}, #{order.origin}, #{order.unitPrice}, #{order.number}, #{order.amount})
+        </foreach>
+    </insert>
+</mapper>

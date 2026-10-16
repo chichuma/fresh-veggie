@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.freshveggie.mapper.ProductMapper">
+
+    <!-- 商品视图:单表 + 分类名,生鲜字段全部映射(驼峰转换依赖 mybatis-plus map-underscore-to-camel-case) -->
+    <resultMap id="ProductVOMap" type="com.freshveggie.vo.ProductVO" autoMapping="true">
+        <id column="id" property="id"/>
+        <result column="category_name" property="categoryName"/>
+    </resultMap>
+
+    <sql id="productVoColumns">
+        select d.id, d.name, d.category_id, d.price, d.original_price, d.unit, d.spec, d.origin,
+               d.shelf_life_days, d.storage_type, d.is_presale, d.stock, d.sales_count,
+               d.image, d.description, d.status, d.update_time,
+               c.name as category_name
+        from product d
+                 join category c on d.category_id = c.id
+    </sql>
+
+    <select id="getProductVoList" resultMap="ProductVOMap">
+        <include refid="productVoColumns"/>
+        <where>
+            <if test="query.name != null and query.name != ''">
+                and d.name like concat('%', #{query.name}, '%')
+            </if>
+            <if test="query.categoryId != null">
+                and d.category_id = #{query.categoryId}
+            </if>
+            <if test="query.status != null">
+                and d.status = #{query.status}
+            </if>
+            <if test="query.storageType != null">
+                and d.storage_type = #{query.storageType}
+            </if>
+            <if test="query.isPresale != null">
+                and d.is_presale = #{query.isPresale}
+            </if>
+        </where>
+        order by d.create_time desc
+    </select>
+
+    <select id="getProductVOById" resultMap="ProductVOMap">
+        <include refid="productVoColumns"/>
+        where d.id = #{id}
+    </select>
+
+    <select id="getProductVoListByCategoryId" resultMap="ProductVOMap">
+        <include refid="productVoColumns"/>
+        where d.category_id = #{categoryId} and d.status = 1
+        order by d.create_time
+    </select>
+
+    <select id="getSellingProductListByIds" resultType="java.lang.Long">
+        select id
+        from product
+        where status = 1
+          and id in
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="getProductImagesByIds" resultType="java.lang.String">
+        select image
+        from product
+        where id in
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="getAllStatusProductesCount" resultType="com.freshveggie.vo.ProductOverViewVO">
+        select
+            (select count(1) from product where status = 1) as sold,
+            (select count(1) from product where status = 0) as discontinued
+    </select>
+</mapper>

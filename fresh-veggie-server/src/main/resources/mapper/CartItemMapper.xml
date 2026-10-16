@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.freshveggie.mapper.CartItemMapper">
+
+    <!--
+      批量新增购物车条目（「再来一单」回填用）。
+
+      2026-09-28 同步收缩列清单：cart_item 瘦身后只剩
+      user_id / product_id / number / create_time / update_time，
+      原来那些商品快照列（name/image/spec/unit/unit_price/amount）已从表中删除。
+      商品信息一律实时读 product 表。
+    -->
+    <insert id="saveItemBatch">
+        insert into cart_item (user_id, product_id, number, create_time, update_time)
+        values
+        <foreach collection="cartItemList" item="cartItem" separator=",">
+            (#{cartItem.userId}, #{cartItem.productId}, #{cartItem.number}, #{cartItem.createTime}, #{cartItem.updateTime})
+        </foreach>
+    </insert>
+
+    <!--
+      加购数量 +n 的原子写法（P2-12）。
+
+      为什么需要它：原 addCartItem 是「先 selectOne 再 insert/update」，
+      同一用户并发加购同一商品时，两个线程可能都查不到行、都去 insert，
+      第二个撞 uk_cart_item(user_id, product_id) 抛唯一键冲突，
+      经全局异常处理变成一次莫名其妙的失败。
+
+      ON DUPLICATE KEY UPDATE 把「存在则累加、不存在则插入」放进一条语句，
+      由唯一索引保证原子性。number 用 VALUES(number) 取本次要插入的值。
+
+      参数名靠 @Param 指定：多参数方法 MyBatis 不会自动按名绑定。
+    -->
+    <insert id="addOrIncrement">
+        insert into cart_item (user_id, product_id, number, create_time, update_time)
+        values (#{userId}, #{productId}, #{number}, NOW(), NOW())
+        on duplicate key update
+            number = number + VALUES(number),
+            update_time = NOW()
+    </insert>
+</mapper>

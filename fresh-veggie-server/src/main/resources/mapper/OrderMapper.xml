@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.freshveggie.mapper.OrderMapper">
+
+    <!--
+        订单总览各状态数量(今日)。
+        5 个相关子查询拼成一行，MyBatis-Plus 的 Wrapper 表达不了这种「一行多标量」的形态，
+        换成 5 次 selectCount 会从 1 次往返退化成 5 次，所以保留在 XML。
+
+        2026-10-01（P2-8）：去掉 DATE(create_time) = CURRENT_DATE 的写法。
+        给列套 DATE() 会让该列上的索引失效（idx_orders_status_create 的前导列是
+        status、第二列是 create_time —— 一旦 create_time 被函数包住，
+        第二列就没法参与范围扫描）。改成半开区间 [今日零点, 明日零点)，
+        裸列比较可以正常走索引。
+
+        顺带删掉语句末尾的分号（P2-16）：MyBatis 拼进其它语句时多余分号会报语法错。
+    -->
+    <select id="getAllStatusOrderCount" resultType="com.freshveggie.vo.OrderOverViewVO">
+        select
+            (select count(1) from orders
+              where status = 2
+                and create_time &gt;= CURRENT_DATE
+                and create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)) as preparing,
+            (select count(1) from orders
+              where status = 3
+                and create_time &gt;= CURRENT_DATE
+                and create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)) as delivering,
+            (select count(1) from orders
+              where status = 4
+                and create_time &gt;= CURRENT_DATE
+                and create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)) as completed,
+            (select count(1) from orders
+              where status = 5
+                and create_time &gt;= CURRENT_DATE
+                and create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)) as cancelled,
+            (select count(1) from orders
+              where create_time &gt;= CURRENT_DATE
+                and create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)) as all_orders
+    </select>
+</mapper>

@@ -1,0 +1,91 @@
+server:
+  port: ${SERVER_PORT:8088}
+  tomcat:
+    accept-count: ${TOMCAT_ACCEPT_COUNT:1000}
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:20000}
+
+spring:
+  application:
+    name: fresh-veggie-server
+  profiles:
+    # 必须在此处给默认值：profile 决定了要不要加载 application-local.yml，
+    # 若把这个默认值挪到 local 文件里就形成循环依赖，应用起不来。
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    driver-class-name: ${DB_DRIVER:com.mysql.cj.jdbc.Driver}
+    url: ${DB_URL:}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:50}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: ${DB_POOL_CONN_TIMEOUT:3000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:1800000}
+      pool-name: ${DB_POOL_NAME:FreshVeggieHikariCP}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          min-idle: ${REDIS_POOL_MIN_IDLE:8}
+          max-active: ${REDIS_POOL_MAX_ACTIVE:64}
+          max-idle: ${REDIS_POOL_MAX_IDLE:32}
+          max-wait: ${REDIS_POOL_MAX_WAIT:-1ms}
+
+mybatis-plus:
+  mapper-locations: ${MYBATIS_MAPPER_LOCATIONS:classpath:mapper/*.xml}
+  type-aliases-package: ${MYBATIS_TYPE_ALIASES_PACKAGE:com.freshveggie.entity}
+  configuration:
+    map-underscore-to-camel-case: ${MYBATIS_MAP_UNDERSCORE_TO_CAMEL_CASE:true}
+  global-config:
+    db-config:
+      id-type: ${MYBATIS_ID_TYPE:auto}
+
+veggie:
+  local-storage:
+    base-path: ${LOCAL_STORAGE_BASE_PATH:uploads}
+  jwt:
+    # 两个密钥故意不给默认值：留空则应用启动失败，逼你在 local 配置里显式设置。
+    # 固定密钥 = 任何人都能伪造任意用户的 token。
+    admin-secret-key: ${JWT_ADMIN_SECRET:}
+    admin-ttl: ${JWT_ADMIN_TTL:7200000}
+    admin-token-name: ${JWT_ADMIN_TOKEN_NAME:token}
+    user-secret-key: ${JWT_USER_SECRET:}
+    user-ttl: ${JWT_USER_TTL:604800000}
+    user-token-name: ${JWT_USER_TOKEN_NAME:auth-token}
+  baidu:
+    ak: ${BAIDU_AK:}
+    location-url: ${BAIDU_LOCATION_URL:https://api.map.baidu.com/geocoding/v3/}
+  shop:
+    limit-distance: ${SHOP_LIMIT_DISTANCE:5}
+    max-delivery-lead-days: ${SHOP_MAX_DELIVERY_LEAD_DAYS:30}
+    degrade-on-map-failure: ${DEGRADE_ON_MAP_FAILURE:true}
+    location:
+      lng: ${SHOP_LNG:0}
+      lat: ${SHOP_LAT:0}
+  wechat:
+    appid: ${WECHAT_APPID:}
+    secret: ${WECHAT_SECRET:}
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.freshveggie: ${LOG_LEVEL_APP:INFO}
+    org.springframework: ${LOG_LEVEL_SPRING:WARN}
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:INFO}
+    org.springframework.security: ${LOG_LEVEL_SPRING_SECURITY:WARN}
+    org.hibernate.SQL: ${LOG_LEVEL_HIBERNATE_SQL:WARN}
+    org.hibernate.orm.jdbc.bind: ${LOG_LEVEL_HIBERNATE_BIND:WARN}
+    com.zaxxer.hikari: ${LOG_LEVEL_HIKARI:WARN}
+  pattern:
+    console: ${LOG_PATTERN_CONSOLE:%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n}
+
+springdoc:
+  api-docs:
+    path: ${SPRINGDOC_API_DOCS_PATH:/v3/api-docs}
+  swagger-ui:
+    path: ${SPRINGDOC_SWAGGER_UI_PATH:/swagger-ui.html}

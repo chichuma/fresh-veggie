@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.freshveggie.mapper.ReportMapper">
+
+    <!--
+      ====================================================================
+      统计口径（2026-10-01 统一，P2-6 / P2-8）
+      ====================================================================
+      【时间基准】全部改用 orders.create_time（下单时间）。
+
+      为什么不用 paid_time：paid_time 是「可变量」—— 一笔昨天创建、今天支付的订单，
+      在按 paid_time 统计时属于今天，在按 create_time 统计时属于昨天。
+      同一个订单在不同报表里落到不同日期，是此前「营业额/工作台」与
+      「订单统计/Top10」口径对不上的根因。
+      create_time 一经写入永不改变，是更稳定的日聚合基准。
+
+      【区间写法】全部用半开区间 [begin 00:00:00, end+1天 00:00:00)。
+      原来写 `DATE(col) >= #{begin} AND DATE(col) <= #{end}`，
+      给列套了 DATE() 函数 —— 列上无法用索引，只能全表扫描，
+      把重构时精心重建的 idx_orders_status_create / idx_orders_user_create
+      全部废掉。半开区间是裸列比较，可以走范围扫描。
+
+      【日归属】DATE_ADD(dr.dt, INTERVAL 1 DAY) 即「次日零点」，
+      与 dr.dt 构成一天的半开区间。
+      ====================================================================
+    -->
+
+    <!-- 订单时间区间条件：两个日期都传才按区间，否则退化成「今天」 -->
+    <sql id="orderDateCondition">
+        <choose>
+            <when test="begin != null and end != null">
+                AND create_time &gt;= #{begin}
+                AND create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+            </when>
+            <otherwise>
+                AND create_time &gt;= CURRENT_DATE
+                AND create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 用户注册时间区间条件（口径同上，作用于 user.create_time） -->
+    <sql id="userDateCondition">
+        <choose>
+            <when test="begin != null and end != null">
+                AND create_time &gt;= #{begin}
+                AND create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+            </when>
+            <otherwise>
+                AND create_time &gt;= CURRENT_DATE
+                AND create_time &lt; DATE_ADD(CURRENT_DATE, INTERVAL 1 DAY)
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 每日营业额(仅已完成订单)。递归 CTE 用来补全区间内没有订单的日期 -->
+    <select id="getTurnoverList" resultType="com.freshveggie.service.impl.ReportServiceImpl$TurnoverDate">
+        WITH RECURSIVE date_range AS (
+            SELECT DATE(#{begin}) AS dt
+            UNION ALL
+            SELECT DATE_ADD(dt, INTERVAL 1 DAY)
+            FROM date_range
+            WHERE dt &lt; DATE(#{end})
+        )
+        SELECT
+            dr.dt AS date,
+            COALESCE(SUM(o.total_amount), 0) AS total_amount
+        FROM date_range dr
+                 LEFT JOIN orders o
+                           ON o.create_time &gt;= dr.dt
+                               AND o.create_time &lt; DATE_ADD(dr.dt, INTERVAL 1 DAY)
+                               AND o.status = 4
+        GROUP BY dr.dt
+        ORDER BY dr.dt
+    </select>
+
+    <!-- 每日订单统计(新增 + 有效订单数) -->
+    <select id="getOrdersStatistics" resultType="com.freshveggie.service.impl.ReportServiceImpl$OrderDate">
+        WITH RECURSIVE date_range AS (
+            SELECT DATE(#{begin}) AS dt
+            UNION ALL
+            SELECT DATE_ADD(dt, INTERVAL 1 DAY)
+            FROM date_range
+            WHERE dt &lt; DATE(#{end})
+        )
+        SELECT
+            dr.dt AS date,
+            (
+                select count(1)
+                from orders o
+                where o.create_time &gt;= dr.dt
+                  and o.create_time &lt; DATE_ADD(dr.dt, INTERVAL 1 DAY)
+            ) AS daily_new_orders,
+            (
+                select count(1)
+                from orders o
+                where o.create_time &gt;= dr.dt
+                  and o.create_time &lt; DATE_ADD(dr.dt, INTERVAL 1 DAY)
+                  and o.status = 4
+            ) AS daily_effective_new_orders
+        FROM date_range dr
+        ORDER BY dr.dt
+    </select>
+
+    <!-- 每日新增/累计用户统计 -->
+    <select id="getUserStatistics" resultType="com.freshveggie.service.impl.ReportServiceImpl$UserDate">
+        WITH RECURSIVE date_range AS (
+            SELECT DATE(#{begin}) AS dt
+            UNION ALL
+            SELECT DATE_ADD(dt, INTERVAL 1 DAY)
+            FROM date_range
+            WHERE dt &lt; DATE(#{end})
+        )
+        SELECT
+            dr.dt AS date,
+            (
+                select count(1)
+                from user u
+                where u.create_time &gt;= dr.dt
+                  and u.create_time &lt; DATE_ADD(dr.dt, INTERVAL 1 DAY)
+            ) AS daily_new_users,
+            (
+                SELECT COUNT(1)
+                FROM user u
+                WHERE u.create_time &lt; DATE_ADD(dr.dt, INTERVAL 1 DAY)
+            ) AS cumulative_users
+        FROM date_range dr
+        ORDER BY dr.dt
+    </select>
+
+    <!--
+      商品销量 Top10(已完成订单)。
+
+      P2-7：改用 order_item 的快照列 oi.name，并去掉对 product 的 join。
+      原来 join product 取 p.name 有三个问题：
+        1. 商品改名后，历史销量会被归到【新名字】下，报表口径随时间漂移；
+        2. 商品被物理删除（ProductController 有 @DeleteMapping）后，
+           inner join 会让这些销量【从 Top10 里消失】；
+        3. order_item.name 本来就是「下单那一刻的商品名快照」，
+           报表要的正是这个语义。
+      顺带：去掉了 DATE() 包裹，区间条件可走索引（P2-8）。
+    -->
+    <select id="getSaleProductTop10" resultType="com.freshveggie.service.impl.ReportServiceImpl$SalesTop10">
+        select
+            oi.name       as name,
+            sum(oi.number) as count
+        from orders o
+                 join order_item oi on o.id = oi.order_id
+        where o.create_time &gt;= #{begin}
+          and o.create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+          and o.status = 4
+        group by oi.name
+        order by count desc
+        limit 10
+    </select>
+
+    <!-- 营业额汇总(含完成率/客单价/新增用户)：派生表 + 聚合 + nullif 防除零。
+         注意：被 WorkspaceController 的 dashboard 复用（begin/end 传 null 表示按今天统计），勿删。
+         完成率 = 已完成订单数 / 【同期下单的订单总数】，分子分母同为 create_time 口径。 -->
+    <select id="getBusinessData" resultType="com.freshveggie.vo.BusinessDataVO">
+        select
+            round(o.turnover, 2) as turnover,
+            o.valid_order_count,
+            ifnull(
+                round(
+                    o.valid_order_count / nullif(
+                        (
+                            select count(1) from orders where 1 = 1
+                            <include refid="orderDateCondition"/>
+                        ), 0)
+                    ,2)
+            , 0) as order_completion_rate,
+            ifnull(round(o.turnover / nullif(o.valid_order_count, 0), 2), 0) as unit_price,
+            (
+                select count(1) from user where 1 = 1
+                <include refid="userDateCondition"/>
+            ) as new_users
+        from
+        (
+            select
+                ifnull(sum(total_amount), 0) as turnover,
+                count(1) as valid_order_count
+             from orders
+             where status = 4
+            <include refid="orderDateCondition"/>
+        ) o
+    </select>
+</mapper>
